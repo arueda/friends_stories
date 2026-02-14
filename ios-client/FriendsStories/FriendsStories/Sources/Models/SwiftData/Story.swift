@@ -10,7 +10,10 @@ import SwiftData
     var imageUrl: String
     var caption: String?
     var createdAt: Date
+    var seenAt: Date?
     @Relationship(inverse: \User.stories) var user: User?
+
+    var isSeen: Bool { seenAt != nil }
 
     init(id: Int64, imageUrl: String, caption: String? = nil, createdAt: Date) {
         self.id = id

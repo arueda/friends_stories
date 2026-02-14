@@ -36,6 +36,12 @@ final class StorySessionViewModel {
     func startTimer() {
         progress = 0
         timerRunning = true
+        markCurrentStorySeen()
+    }
+
+    private func markCurrentStorySeen() {
+        guard let story = currentStory, !story.isSeen else { return }
+        story.seenAt = Date()
     }
 
     func goBack() {
