@@ -20,6 +20,7 @@ struct FriendsListView: View {
     @State private var loadError = false
     @State private var showingSettings = false
     @AppStorage("storySpeed") private var storySpeed: String = StorySpeed.normal.rawValue
+    @Environment(\.modelContext) private var modelContext
     @Environment(\.storiesRepository) private var storiesRepository
 
     var body: some View {
@@ -90,6 +91,19 @@ struct FriendsListView: View {
                         }
                     }
                 }
+
+                #if DEBUG
+                Section("settings.testing") {
+                    Button(role: .destructive) {
+                        resetSeenState()
+                    } label: {
+                        Text("settings.reset_seen")
+                    }
+                    Text("settings.reset_seen_description")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                #endif
             }
             .navigationTitle(String(localized: "settings.title"))
             .navigationBarTitleDisplayMode(.inline)
@@ -101,6 +115,16 @@ struct FriendsListView: View {
         }
         .presentationDetents([.medium])
     }
+
+    #if DEBUG
+    private func resetSeenState() {
+        for user in users {
+            for story in user.stories {
+                story.seenAt = nil
+            }
+        }
+    }
+    #endif
 
     private func refresh() async {
         isLoading = true
@@ -118,12 +142,13 @@ struct FriendsListView: View {
         let userIndex = sorted.firstIndex(where: { $0.id == user.id }) ?? 0
         let sortedStories = user.stories.sorted { $0.createdAt < $1.createdAt }
         return HStack(alignment: .top) {
-            // There is no cache mechanism for AsyncImage.
-            // Change for a custom implementation
-            AsyncImage(url: URL(string: user.avatarURL ?? "")) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                Circle().fill(.gray.opacity(0.3))
+            CachedAsyncImage(url: URL(string: user.avatarURL ?? "")) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                default:
+                    Circle().fill(.gray.opacity(0.3))
+                }
             }
             .frame(width: 44, height: 44)
             .clipShape(Circle())
@@ -160,7 +185,7 @@ struct FriendsListView: View {
     }
 
     private func storyThumbnail(story: Story) -> some View {
-        AsyncImage(url: URL(string: story.imageUrl)) { phase in
+        CachedAsyncImage(url: URL(string: story.imageUrl)) { phase in
             switch phase {
             case .success(let image):
                 image

@@ -25,7 +25,7 @@ struct StoryViewerView: View {
 
             if let story = viewModel.currentStory {
                 GeometryReader { geo in
-                    AsyncImage(url: URL(string: story.imageUrl)) { phase in
+                    CachedAsyncImage(url: URL(string: story.imageUrl)) { phase in
                         switch phase {
                         case .success(let image):
                             image
@@ -64,10 +64,13 @@ struct StoryViewerView: View {
 
                 if let user = viewModel.currentUser {
                     HStack(spacing: 10) {
-                        AsyncImage(url: URL(string: user.avatarURL ?? "")) { image in
-                            image.resizable().scaledToFill()
-                        } placeholder: {
-                            Circle().fill(.gray.opacity(0.5))
+                        CachedAsyncImage(url: URL(string: user.avatarURL ?? "")) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image.resizable().scaledToFill()
+                            default:
+                                Circle().fill(.gray.opacity(0.5))
+                            }
                         }
                         .frame(width: 32, height: 32)
                         .clipShape(Circle())

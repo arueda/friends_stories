@@ -1,8 +1,5 @@
 //
-//  StorySpeed.swift
 //  FriendsStories
-//
-//  Created by Angel Rueda Mejia on 14/02/26.
 //
 
 import Foundation

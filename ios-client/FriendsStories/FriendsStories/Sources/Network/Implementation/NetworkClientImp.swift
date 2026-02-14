@@ -7,10 +7,12 @@ import Foundation
 struct NetworkClientImpl: NetworkClient {
     private let baseURL: URL
     private let decoder: JSONDecoder
+    private let session: URLSessionProtocol
 
-    init(baseURL: URL, decoder: JSONDecoder) {
+    init(baseURL: URL, decoder: JSONDecoder, session: URLSessionProtocol = URLSession.shared) {
         self.baseURL = baseURL
         self.decoder = decoder
+        self.session = session
     }
 
     func fetch<E: Endpoint>(_ endpoint: E) async throws -> E.Response {
@@ -26,7 +28,7 @@ struct NetworkClientImpl: NetworkClient {
         var request = URLRequest(url: finalURL)
         request.httpMethod = endpoint.method
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let urlResponse = response as? HTTPURLResponse else {
             throw URLError(.badServerResponse)
         }

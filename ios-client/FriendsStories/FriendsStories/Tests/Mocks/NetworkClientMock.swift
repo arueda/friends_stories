@@ -1,3 +1,7 @@
+//
+//  FriendsStories
+//
+
 import Foundation
 @testable import FriendsStories
 
