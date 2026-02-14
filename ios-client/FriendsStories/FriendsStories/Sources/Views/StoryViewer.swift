@@ -3,21 +3,25 @@
 //
 
 import SwiftUI
+import Combine
 
 struct StoryViewerView: View {
-    let user: User
-    @State private var currentIndex: Int = 0
+    @State private var viewModel: StorySessionViewModel
     @Environment(\.dismiss) private var dismiss
+    
+    private let user: User
+    private let timer = Timer.publish(every: 1.0 / 30, on: .main, in: .common).autoconnect()
 
-    private var stories: [Story] {
-        user.stories.sorted { $0.createdAt < $1.createdAt }
+    init(user: User) {
+        self.user = user
+        self._viewModel = State(initialValue: StorySessionViewModel(user: user))
     }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            if let story = stories[safe: currentIndex] {
+            if let story = viewModel.currentStory {
                 GeometryReader { geo in
                     AsyncImage(url: URL(string: story.imageUrl)) { phase in
                         switch phase {
@@ -45,17 +49,16 @@ struct StoryViewerView: View {
             HStack(spacing: 0) {
                 Color.clear
                     .contentShape(Rectangle())
-                    .onTapGesture { goBack() }
+                    .onTapGesture { viewModel.goBack() }
                 Color.clear
                     .contentShape(Rectangle())
-                    .onTapGesture { goForward() }
+                    .onTapGesture { viewModel.goForward() }
             }
             .ignoresSafeArea()
 
             VStack {
                 progressBars
-                    .padding(.horizontal, 8)
-                    .padding(.top, 8)
+                    .padding([.horizontal, .top], 8)
 
                 HStack(spacing: 10) {
                     AsyncImage(url: URL(string: user.avatarURL ?? "")) { image in
@@ -70,13 +73,18 @@ struct StoryViewerView: View {
                         .font(.subheadline.bold())
                         .foregroundStyle(.white)
 
-                    if let story = stories[safe: currentIndex] {
+                    if let story = viewModel.currentStory {
                         Text(story.createdAt, style: .relative)
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.7))
                     }
 
                     Spacer()
+
+                    Image(systemName: "timer")
+                        .font(.body)
+                        .foregroundStyle(.white.opacity(0.8))
+                        .symbolEffect(.rotate, isActive: viewModel.timerRunning)
 
                     Button { dismiss() } label: {
                         Image(systemName: "xmark")
@@ -88,7 +96,7 @@ struct StoryViewerView: View {
 
                 Spacer()
 
-                if let caption = stories[safe: currentIndex]?.caption {
+                if let caption = viewModel.currentStory?.caption {
                     Text(caption)
                         .font(.body)
                         .foregroundStyle(.white)
@@ -99,6 +107,11 @@ struct StoryViewerView: View {
             }
         }
         .statusBarHidden()
+        .onAppear { viewModel.startTimer() }
+        .onReceive(timer) { _ in viewModel.tick() }
+        .onChange(of: viewModel.shouldDismiss) { _, shouldDismiss in
+            if shouldDismiss { dismiss() }
+        }
         .gesture(
             DragGesture(minimumDistance: 50)
                 .onEnded { value in
@@ -108,42 +121,24 @@ struct StoryViewerView: View {
                 }
         )
     }
-    
-    
 
     // MARK: - Progress bars
 
     private var progressBars: some View {
         HStack(spacing: 4) {
-            ForEach(stories.indices, id: \.self) { index in
-                Capsule()
-                    .fill(index <= currentIndex ? Color.white : Color.white.opacity(0.35))
-                    .frame(height: 2.5)
+            ForEach(viewModel.stories.indices, id: \.self) { index in
+                GeometryReader { geo in
+                    Capsule()
+                        .fill(Color.white.opacity(0.35))
+                        .overlay(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.white)
+                                .frame(width: viewModel.barWidth(for: index, totalWidth: geo.size.width))
+                        }
+                        .clipShape(Capsule())
+                }
+                .frame(height: 2.5)
             }
         }
-    }
-
-    // MARK: - Navigation
-
-    private func goBack() {
-        if currentIndex > 0 {
-            withAnimation { currentIndex -= 1 }
-        }
-    }
-
-    private func goForward() {
-        if currentIndex < stories.count - 1 {
-            withAnimation { currentIndex += 1 }
-        } else {
-            dismiss()
-        }
-    }
-}
-
-// MARK: - Safe subscript
-
-private extension Array {
-    subscript(safe index: Int) -> Element? {
-        indices.contains(index) ? self[index] : nil
     }
 }
