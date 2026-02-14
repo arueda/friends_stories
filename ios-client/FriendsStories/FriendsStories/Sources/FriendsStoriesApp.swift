@@ -1,3 +1,7 @@
+//
+//  FriendsStories
+//
+
 import SwiftUI
 
 @main

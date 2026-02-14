@@ -1,4 +1,6 @@
-// Model for User
+//
+//  FriendsStories
+//
 
 import Foundation
 import SwiftData
