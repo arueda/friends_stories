@@ -4,7 +4,8 @@
 
 protocol FriendsStoriesAPI {
     // GET /api/users — list all users
-    func getUsers() async throws -> [User]
+    func getUsers() async throws -> [UserDTO]
     // GET /api/stories — paginated stories grouped by user
-    func getStories() async throws -> [Story]
+    func getStories() async throws -> [StoryDTO]
 }
+
