@@ -4,6 +4,12 @@
 
 import Foundation
 struct NetworkClientImp: NetworkClient {
+    private let decoder: JSONDecoder
+    
+    init(decoder: JSONDecoder) {
+        self.decoder = decoder
+    }
+    
     func fetch<E: Endpoint>(_ endpoint: E) async throws -> E.Response {
         guard let baseURL = URL(string: endpoint.path) else {
             throw URLError(.badURL)
@@ -28,7 +34,7 @@ struct NetworkClientImp: NetworkClient {
         
         switch urlResponse.statusCode {
         case 200...299:
-            let decoded = try JSONDecoder().decode(E.Response.self, from: data)
+            let decoded = try decoder.decode(E.Response.self, from: data)
             return decoded
         case 300...399:
             throw URLError(.badServerResponse)

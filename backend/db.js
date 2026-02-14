@@ -22,7 +22,7 @@ db.exec(`
     user_id INTEGER NOT NULL REFERENCES users(id),
     image_url TEXT NOT NULL,
     caption TEXT,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   );
 `);
 

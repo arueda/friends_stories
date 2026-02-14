@@ -3,5 +3,5 @@
 //
 
 protocol StoriesRepository {
-    func refreshStories()
+    func refreshStories() async throws
 }
