@@ -1,0 +1,3 @@
+protocol StoriesRepository {
+    func refreshStories()
+}
