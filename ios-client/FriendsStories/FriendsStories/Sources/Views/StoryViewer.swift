@@ -12,9 +12,9 @@ struct StoryViewerView: View {
     private let user: User
     private let timer = Timer.publish(every: 1.0 / 30, on: .main, in: .common).autoconnect()
 
-    init(user: User) {
+    init(user: User, startingIndex: Int = 0) {
         self.user = user
-        self._viewModel = State(initialValue: StorySessionViewModel(user: user))
+        self._viewModel = State(initialValue: StorySessionViewModel(user: user, startingIndex: startingIndex))
     }
 
     var body: some View {

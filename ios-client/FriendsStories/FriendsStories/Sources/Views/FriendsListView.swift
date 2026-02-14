@@ -6,56 +6,63 @@ import SwiftUI
 import SwiftData
 
 struct FriendsListView: View {
-    private enum ViewState {
-        case loading
-        case loaded
-        case error
-    }
-
     @Query(sort: \User.username) private var users: [User]
-    @State private var viewState: ViewState = .loading
-    @State private var selectedUser: User?
+    private var sortedUsers: [User] {
+        users.sorted { lhs, rhs in
+            let lhsUnseen = lhs.stories.contains { !$0.isSeen }
+            let rhsUnseen = rhs.stories.contains { !$0.isSeen }
+            if lhsUnseen != rhsUnseen { return lhsUnseen }
+            return lhs.username < rhs.username
+        }
+    }
+    @State private var selection: StorySelection?
+    @State private var isLoading = true
+    @State private var loadError = false
     @Environment(\.storiesRepository) private var storiesRepository
 
     var body: some View {
-        switch viewState {
-            case .loading:
-            VStack {
-                ProgressView()
-                Text("Loading Friend's Stories...")
-            }
-            .task {
-                do {
-                    try await storiesRepository?.refreshStories()
-                    viewState = .loaded
-                } catch {
-                    viewState = .error
-                }
-            }
-        case .loaded:
-            List(users) { user in
-                Button {
-                    selectedUser = user
-                } label: {
-                    userRow(user)
-                }
-            }
-            .fullScreenCover(item: $selectedUser) { user in
-                StoryViewerView(user: user)
-            }
-            .refreshable {
-                viewState = .loading
-            }
-        case .error:
-            Text("Error loading users. Pull to refresh!")
-                .refreshable {
-                    viewState = .loading
-                }
+        List(sortedUsers) { user in
+            userRow(user)
         }
+        .overlay {
+            if isLoading && users.isEmpty {
+                VStack {
+                    ProgressView()
+                    Text("Loading Friend's Stories...")
+                }
+            } else if loadError && users.isEmpty {
+                Text("Error loading users. Pull to refresh!")
+            }
+        }
+        .task {
+            await refresh()
+        }
+        .refreshable {
+            await refresh()
+        }
+        .fullScreenCover(item: $selection) { selection in
+            StoryViewerView(user: selection.user, startingIndex: selection.startingIndex)
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .navigationTitle("My Friend's Stories")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func refresh() async {
+        isLoading = true
+        loadError = false
+        do {
+            try await storiesRepository?.refreshStories()
+        } catch {
+            loadError = true
+        }
+        isLoading = false
     }
 
     private func userRow(_ user: User) -> some View {
-        HStack {
+        let sortedStories = user.stories.sorted { $0.createdAt < $1.createdAt }
+        return HStack(alignment: .top) {
             // There is no cache mechanism for AsyncImage.
             // Change for a custom implementation
             AsyncImage(url: URL(string: user.avatarURL ?? "")) { image in
@@ -72,13 +79,52 @@ struct FriendsListView: View {
                         .frame(width: 50, height: 50)
                 }
             }
+            .onTapGesture {
+                selection = StorySelection(user: user, startingIndex: 0)
+            }
 
-            VStack(alignment: .leading) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(user.username)
                     .font(.headline)
                 subtitleView(for: user)
+
+                if !sortedStories.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(Array(sortedStories.enumerated()), id: \.element.id) { index, story in
+                                storyThumbnail(story: story)
+                                    .onTapGesture {
+                                        selection = StorySelection(user: user, startingIndex: index)
+                                    }
+                            }
+                        }
+                    }
+                }
             }
         }
+    }
+
+    private func storyThumbnail(story: Story) -> some View {
+        AsyncImage(url: URL(string: story.imageUrl)) { phase in
+            switch phase {
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+            case .failure:
+                Image(systemName: "photo")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            default:
+                ProgressView()
+                    .controlSize(.mini)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .frame(width: 56, height: 80)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .opacity(story.isSeen ? 0.5 : 1.0)
     }
 
     @ViewBuilder
@@ -94,4 +140,10 @@ struct FriendsListView: View {
                 .foregroundStyle(.secondary)
         }
     }
+}
+
+private struct StorySelection: Identifiable {
+    let id = UUID()
+    let user: User
+    let startingIndex: Int
 }

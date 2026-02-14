@@ -18,8 +18,9 @@ final class StorySessionViewModel {
         stories.indices.contains(currentIndex) ? stories[currentIndex] : nil
     }
 
-    init(user: User) {
+    init(user: User, startingIndex: Int = 0) {
         self.stories = user.stories.sorted { $0.createdAt < $1.createdAt }
+        self.currentIndex = min(startingIndex, max(stories.count - 1, 0))
     }
 
     func tick() {
