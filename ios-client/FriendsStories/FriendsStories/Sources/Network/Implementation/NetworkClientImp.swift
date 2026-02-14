@@ -3,19 +3,18 @@
 //
 
 import Foundation
-struct NetworkClientImp: NetworkClient {
+
+struct NetworkClientImpl: NetworkClient {
+    private let baseURL: URL
     private let decoder: JSONDecoder
-    
-    init(decoder: JSONDecoder) {
+
+    init(baseURL: URL, decoder: JSONDecoder) {
+        self.baseURL = baseURL
         self.decoder = decoder
     }
-    
+
     func fetch<E: Endpoint>(_ endpoint: E) async throws -> E.Response {
-        guard let baseURL = URL(string: endpoint.path) else {
-            throw URLError(.badURL)
-        }
-        
-        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+        var components = URLComponents(url: baseURL.appendingPathComponent(endpoint.path), resolvingAgainstBaseURL: false)
         if !endpoint.queryItems.isEmpty {
             components?.queryItems = endpoint.queryItems
         }
