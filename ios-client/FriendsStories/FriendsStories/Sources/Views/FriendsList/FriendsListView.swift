@@ -18,6 +18,8 @@ struct FriendsListView: View {
     @State private var selection: StorySelection?
     @State private var isLoading = true
     @State private var loadError = false
+    @State private var showingSettings = false
+    @AppStorage("storySpeed") private var storySpeed: String = StorySpeed.normal.rawValue
     @Environment(\.storiesRepository) private var storiesRepository
 
     var body: some View {
@@ -28,10 +30,10 @@ struct FriendsListView: View {
             if isLoading && users.isEmpty {
                 VStack {
                     ProgressView()
-                    Text("Loading Friend's Stories...")
+                    Text("friends.loading")
                 }
             } else if loadError && users.isEmpty {
-                Text("Error loading users. Pull to refresh!")
+                Text("friends.error")
             }
         }
         .task {
@@ -41,12 +43,63 @@ struct FriendsListView: View {
             await refresh()
         }
         .fullScreenCover(item: $selection) { selection in
-            StoryViewerView(user: selection.user, startingIndex: selection.startingIndex)
+            StoryViewerView(
+                users: selection.users,
+                startingUserIndex: selection.startingUserIndex,
+                startingStoryIndex: selection.startingStoryIndex
+            )
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .navigationTitle("My Friend's Stories")
+        .navigationTitle(String(localized: "friends.title"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .automatic) {
+                Button { showingSettings = true } label: {
+                    Image(systemName: "gearshape")
+                }
+            }
+        }
+        .sheet(isPresented: $showingSettings) {
+            storySpeedSettings
+        }
+    }
+
+    private var storySpeedSettings: some View {
+        NavigationStack {
+            List {
+                Section("settings.story_speed") {
+                    ForEach(StorySpeed.allCases) { speed in
+                        Button {
+                            storySpeed = speed.rawValue
+                        } label: {
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(speed.label)
+                                        .foregroundStyle(.primary)
+                                    Text("settings.seconds_per_story \(Int(speed.duration))")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if storySpeed == speed.rawValue {
+                                    Image(systemName: "checkmark")
+                                        .foregroundStyle(Color.accentColor)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle(String(localized: "settings.title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(String(localized: "settings.done")) { showingSettings = false }
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 
     private func refresh() async {
@@ -61,6 +114,8 @@ struct FriendsListView: View {
     }
 
     private func userRow(_ user: User) -> some View {
+        let sorted = sortedUsers
+        let userIndex = sorted.firstIndex(where: { $0.id == user.id }) ?? 0
         let sortedStories = user.stories.sorted { $0.createdAt < $1.createdAt }
         return HStack(alignment: .top) {
             // There is no cache mechanism for AsyncImage.
@@ -80,7 +135,7 @@ struct FriendsListView: View {
                 }
             }
             .onTapGesture {
-                selection = StorySelection(user: user, startingIndex: 0)
+                selection = StorySelection(users: sorted, startingUserIndex: userIndex, startingStoryIndex: 0)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -94,7 +149,7 @@ struct FriendsListView: View {
                             ForEach(Array(sortedStories.enumerated()), id: \.element.id) { index, story in
                                 storyThumbnail(story: story)
                                     .onTapGesture {
-                                        selection = StorySelection(user: user, startingIndex: index)
+                                        selection = StorySelection(users: sorted, startingUserIndex: userIndex, startingStoryIndex: index)
                                     }
                             }
                         }
@@ -131,11 +186,11 @@ struct FriendsListView: View {
     private func subtitleView(for user: User) -> some View {
         let unseenCount = user.stories.filter { !$0.isSeen }.count
         if unseenCount > 0 {
-            Text("\(unseenCount) new")
+            Text("friends.new_count \(unseenCount)")
                 .font(.caption)
                 .foregroundStyle(Color.accentColor)
         } else {
-            Text("\(user.stories.count) stories")
+            Text("friends.story_count \(user.stories.count)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -144,6 +199,7 @@ struct FriendsListView: View {
 
 private struct StorySelection: Identifiable {
     let id = UUID()
-    let user: User
-    let startingIndex: Int
+    let users: [User]
+    let startingUserIndex: Int
+    let startingStoryIndex: Int
 }

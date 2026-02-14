@@ -6,21 +6,36 @@ import SwiftUI
 
 @Observable
 final class StorySessionViewModel {
-    private(set) var currentIndex: Int = 0
+    private(set) var currentUserIndex: Int
+    private(set) var currentStoryIndex: Int = 0
     private(set) var progress: CGFloat = 0
     private(set) var shouldDismiss = false
     var timerRunning = true
 
-    let stories: [Story]
-    let storyDuration: TimeInterval = 10.0
-
-    var currentStory: Story? {
-        stories.indices.contains(currentIndex) ? stories[currentIndex] : nil
+    let users: [User]
+    var storyDuration: TimeInterval {
+        StorySpeed(rawValue: UserDefaults.standard.string(forKey: "storySpeed") ?? "")?.duration ?? StorySpeed.normal.duration
     }
 
-    init(user: User, startingIndex: Int = 0) {
-        self.stories = user.stories.sorted { $0.createdAt < $1.createdAt }
-        self.currentIndex = min(startingIndex, max(stories.count - 1, 0))
+    var currentUser: User? {
+        users.indices.contains(currentUserIndex) ? users[currentUserIndex] : nil
+    }
+
+    var stories: [Story] {
+        currentUser?.stories.sorted { $0.createdAt < $1.createdAt } ?? []
+    }
+
+    var currentStory: Story? {
+        stories.indices.contains(currentStoryIndex) ? stories[currentStoryIndex] : nil
+    }
+
+    init(users: [User], startingUserIndex: Int = 0, startingStoryIndex: Int = 0) {
+        self.users = users
+        self.currentUserIndex = min(startingUserIndex, max(users.count - 1, 0))
+        let sortedStories = users.indices.contains(currentUserIndex)
+            ? users[currentUserIndex].stories.sorted { $0.createdAt < $1.createdAt }
+            : []
+        self.currentStoryIndex = min(startingStoryIndex, max(sortedStories.count - 1, 0))
     }
 
     func tick() {
@@ -46,15 +61,19 @@ final class StorySessionViewModel {
     }
 
     func goBack() {
-        if currentIndex > 0 {
-            currentIndex -= 1
+        if currentStoryIndex > 0 {
+            currentStoryIndex -= 1
             startTimer()
         }
     }
 
     func goForward() {
-        if currentIndex < stories.count - 1 {
-            currentIndex += 1
+        if currentStoryIndex < stories.count - 1 {
+            currentStoryIndex += 1
+            startTimer()
+        } else if currentUserIndex < users.count - 1 {
+            currentUserIndex += 1
+            currentStoryIndex = 0
             startTimer()
         } else {
             shouldDismiss = true
@@ -62,9 +81,9 @@ final class StorySessionViewModel {
     }
 
     func barWidth(for index: Int, totalWidth: CGFloat) -> CGFloat {
-        if index < currentIndex {
+        if index < currentStoryIndex {
             return totalWidth
-        } else if index == currentIndex {
+        } else if index == currentStoryIndex {
             return totalWidth * progress
         } else {
             return 0

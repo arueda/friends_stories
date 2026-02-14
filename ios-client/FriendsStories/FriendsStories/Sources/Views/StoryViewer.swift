@@ -8,13 +8,15 @@ import Combine
 struct StoryViewerView: View {
     @State private var viewModel: StorySessionViewModel
     @Environment(\.dismiss) private var dismiss
-    
-    private let user: User
+
     private let timer = Timer.publish(every: 1.0 / 30, on: .main, in: .common).autoconnect()
 
-    init(user: User, startingIndex: Int = 0) {
-        self.user = user
-        self._viewModel = State(initialValue: StorySessionViewModel(user: user, startingIndex: startingIndex))
+    init(users: [User], startingUserIndex: Int = 0, startingStoryIndex: Int = 0) {
+        self._viewModel = State(initialValue: StorySessionViewModel(
+            users: users,
+            startingUserIndex: startingUserIndex,
+            startingStoryIndex: startingStoryIndex
+        ))
     }
 
     var body: some View {
@@ -60,39 +62,41 @@ struct StoryViewerView: View {
                 progressBars
                     .padding([.horizontal, .top], 8)
 
-                HStack(spacing: 10) {
-                    AsyncImage(url: URL(string: user.avatarURL ?? "")) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        Circle().fill(.gray.opacity(0.5))
-                    }
-                    .frame(width: 32, height: 32)
-                    .clipShape(Circle())
+                if let user = viewModel.currentUser {
+                    HStack(spacing: 10) {
+                        AsyncImage(url: URL(string: user.avatarURL ?? "")) { image in
+                            image.resizable().scaledToFill()
+                        } placeholder: {
+                            Circle().fill(.gray.opacity(0.5))
+                        }
+                        .frame(width: 32, height: 32)
+                        .clipShape(Circle())
 
-                    Text(user.username)
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.white)
-
-                    if let story = viewModel.currentStory {
-                        Text(story.createdAt, style: .relative)
-                            .font(.caption)
-                            .foregroundStyle(.white.opacity(0.7))
-                    }
-
-                    Spacer()
-
-                    Image(systemName: "timer")
-                        .font(.body)
-                        .foregroundStyle(.white.opacity(0.8))
-                        .symbolEffect(.rotate, isActive: viewModel.timerRunning)
-
-                    Button { dismiss() } label: {
-                        Image(systemName: "xmark")
-                            .font(.body.bold())
+                        Text(user.username)
+                            .font(.subheadline.bold())
                             .foregroundStyle(.white)
+
+                        if let story = viewModel.currentStory {
+                            Text(story.createdAt, style: .relative)
+                                .font(.caption)
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "timer")
+                            .font(.body)
+                            .foregroundStyle(.white.opacity(0.8))
+                            .symbolEffect(.rotate, isActive: viewModel.timerRunning)
+
+                        Button { dismiss() } label: {
+                            Image(systemName: "xmark")
+                                .font(.body.bold())
+                                .foregroundStyle(.white)
+                        }
                     }
+                    .padding(.horizontal, 12)
                 }
-                .padding(.horizontal, 12)
 
                 Spacer()
 
