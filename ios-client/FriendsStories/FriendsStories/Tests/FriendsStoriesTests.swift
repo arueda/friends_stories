@@ -57,7 +57,7 @@ struct FriendsStoriesTests {
         }
         
         let apiClient = FriendsStoriesAPIImpl(networkClient: mockClient)
-        let response = try await apiClient.getStories()
+        let response = try await apiClient.getStories(page: 1, limit: 1)
         
         // The mock data has 4 users
         #expect(response.data.count > 0)

@@ -8,6 +8,10 @@ import SwiftData
 class StoriesRepositoryImpl: StoriesRepository {
     private var api: FriendsStoriesAPI
     private var modelContainer: ModelContainer
+    // NOTE: This is a very basic pagination.
+    // The backend returns stories sorted by date.
+    // if new stories get inserted into the database, we might skip them if we are already in page N
+    private var lastPage: Int = 0 // first time we get the first page
     
     init(api: FriendsStoriesAPI, modelContainer: ModelContainer) {
         self.api = api
@@ -16,10 +20,19 @@ class StoriesRepositoryImpl: StoriesRepository {
     
     @MainActor
     func refreshStories() async throws {
-        let response = try await api.getStories()
         let context = modelContainer.mainContext
+        let limit = 10
+        let response = try await api.getStories(page: lastPage, limit: limit)
+        if response.hasMore {
+            lastPage = response.page + 1
+        }
+        try upsert(response.data, in: context)
+        try context.save()
+    }
 
-        for group in response.data {
+    @MainActor
+    private func upsert(_ groups: [UserResponse], in context: ModelContext) throws {
+        for group in groups {
             let userDTO = group.user
             let userId = userDTO.id
 

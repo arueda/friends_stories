@@ -1,0 +1,11 @@
+{
+    "Simulator Target Bundle": "dev.tuist.Friends-Stories",
+    "aps": {
+        "alert": {
+            "title": "New Story",
+            "body": "bob just posted a new story!"
+        },
+        "sound": "default"
+    },
+    "userId": 2
+}

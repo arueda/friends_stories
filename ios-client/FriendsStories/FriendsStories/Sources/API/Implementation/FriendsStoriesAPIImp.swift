@@ -12,9 +12,15 @@ struct FriendsStoriesAPIImpl: FriendsStoriesAPI {
     }
     
     // GET /api/stories — paginated stories grouped by user
-    func getStories() async throws -> StoryResponse {
-        let endpoint = Request<StoryResponse>(path: "/api/stories", method: "GET")
-        let response = try await networkClient.fetch(endpoint)
-        return response
+    func getStories(page: Int, limit: Int) async throws -> StoryResponse {
+        let endpoint = Request<StoryResponse>(
+            path: "/api/stories",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "page", value: String(page)),
+                URLQueryItem(name: "limit", value: String(limit)),
+            ]
+        )
+        return try await networkClient.fetch(endpoint)
     }
 }
