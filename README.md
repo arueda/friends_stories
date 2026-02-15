@@ -4,13 +4,13 @@
 
 - Install mise https://mise.jdx.dev/getting-started.html
 - Install tuist using mise https://docs.tuist.dev/en/guides/install-tuist
-- Generate the Xcode Project using tuist from the ios-client directory: mise x tuist@latest -- tuist generate
+- Generate the Xcode Project using tuist from the `ios-client` directory: `mise x tuist@latest -- tuist generate`
 
 ## Backend
 
 - Install npm
-- In the backend directory, install the server dependencies: npm install
-- Run npm start. The backend should be running by default on port 3000
+- In the backend directory, install the server dependencies: `npm install`
+- Run `npm start`. The backend should be running by default on port 3000
 
 ---
 
