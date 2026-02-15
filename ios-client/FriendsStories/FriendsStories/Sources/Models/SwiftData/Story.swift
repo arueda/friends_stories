@@ -11,6 +11,7 @@ import SwiftData
     var caption: String?
     var createdAt: Date
     var seenAt: Date?
+    var isLiked: Bool?
     @Relationship(inverse: \User.stories) var user: User?
 
     var isSeen: Bool { seenAt != nil }

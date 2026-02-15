@@ -6,20 +6,26 @@ import SwiftUI
 import SwiftData
 import UserNotifications
 
+enum FeedTab: String, CaseIterable, Identifiable {
+    case friends, newest, favorites
+    var id: String { rawValue }
+}
+
 struct FriendsListView: View {
     @AppStorage("storySpeed") private var storySpeed: String = StorySpeed.normal.rawValue
-    
+
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.storiesRepository) private var storiesRepository
     @Environment(NotificationHandler.self) private var notificationHandler
-    
+
     @State private var selection: StorySelection?
     @State private var isLoading = true
     @State private var loadError = false
     @State private var showingSettings = false
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var isGenerating = false
+    @State private var selectedTab: FeedTab = .friends
     
     @Query(sort: \User.username) private var users: [User]
     private var sortedUsers: [User] {
@@ -39,68 +45,23 @@ struct FriendsListView: View {
 
     var body: some View {
         let sorted = sortedUsers
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(sorted.enumerated()), id: \.element.id) {
-                    userIndex,
-                    user in
-                    let sortedStories = user.stories.sorted {
-                        if $0.isSeen != $1.isSeen { return !$0.isSeen }
-                        return $0.createdAt < $1.createdAt
-                    }
-                    
-                    // Avatar + username header
-                    HStack(spacing: 8) {
-                        CachedAsyncImage(url: URL(string: user.avatarURL ?? "")) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image.resizable().scaledToFill()
-                            default:
-                                Circle().fill(.gray.opacity(0.3))
-                            }
-                        }
-                        .frame(width: 44, height: 44)
-                        .clipShape(Circle())
-                        .overlay {
-                            if user.stories.contains(where: { !$0.isSeen }) {
-                                Circle()
-                                    .strokeBorder(Color.accentColor, lineWidth: 2)
-                                    .frame(width: 50, height: 50)
-                            }
-                        }
-                        
-                        Text(user.username)
-                            .font(.headline)
-                        Spacer()
-                        subtitleView(for: user)
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        selection = StorySelection(
-                            users: sorted,
-                            startingUserIndex: userIndex,
-                            startingStoryIndex: 0
-                        )
-                    }
+        VStack(spacing: 0) {
+            Picker("Tab", selection: $selectedTab) {
+                Text("Friends").tag(FeedTab.friends)
+                Text("Newest").tag(FeedTab.newest)
+                Text("Favorites").tag(FeedTab.favorites)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
 
-                    // Story thumbnails grid
-                    LazyVGrid(columns: columns, spacing: 4) {
-                        ForEach(Array(sortedStories.enumerated()), id: \.element.id) { index, story in
-                            storyThumbnail(story: story)
-                                .onTapGesture {
-                                    selection = StorySelection(
-                                        users: sorted,
-                                        startingUserIndex: userIndex,
-                                        startingStoryIndex: index
-                                    )
-                                }
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, 12)
-                }
+            switch selectedTab {
+            case .friends:
+                friendsTab(sorted: sorted)
+            case .newest:
+                newestTab(sorted: sorted)
+            case .favorites:
+                favoritesTab(sorted: sorted)
             }
         }
         .task {
@@ -121,7 +82,7 @@ struct FriendsListView: View {
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Button { showingSettings = true } label: {
-                    Image(systemName: "gearshape")
+                    Image(systemName: "gear").resizable()
                 }
             }
         }
@@ -316,54 +277,125 @@ struct FriendsListView: View {
         isLoading = false
     }
 
-    private func userRow(_ user: User) -> some View {
-        let sorted = sortedUsers
-        let userIndex = sorted.firstIndex(where: { $0.id == user.id }) ?? 0
-        let sortedStories = user.stories.sorted {
-            if $0.isSeen != $1.isSeen { return !$0.isSeen }
-            return $0.createdAt < $1.createdAt
-        }
-        return HStack(alignment: .top) {
-            CachedAsyncImage(url: URL(string: user.avatarURL ?? "")) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                default:
-                    Circle().fill(.gray.opacity(0.3))
-                }
-            }
-            .frame(width: 44, height: 44)
-            .clipShape(Circle())
-            .overlay {
-                if user.stories.contains(where: { !$0.isSeen }) {
-                    Circle()
-                        .strokeBorder(Color.accentColor, lineWidth: 2)
-                        .frame(width: 50, height: 50)
-                }
-            }
-            .onTapGesture {
-                selection = StorySelection(users: sorted, startingUserIndex: userIndex, startingStoryIndex: 0)
-            }
+    private func friendsTab(sorted: [User]) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(sorted.enumerated()), id: \.element.id) {
+                    userIndex,
+                    user in
+                    let sortedStories = user.stories.sorted {
+                        $0.createdAt < $1.createdAt
+                    }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(user.username)
-                    .font(.headline)
-                subtitleView(for: user)
-
-                if !sortedStories.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(Array(sortedStories.enumerated()), id: \.element.id) { index, story in
-                                storyThumbnail(story: story)
-                                    .onTapGesture {
-                                        selection = StorySelection(users: sorted, startingUserIndex: userIndex, startingStoryIndex: index)
-                                    }
+                    // Avatar + username header
+                    HStack(spacing: 8) {
+                        CachedAsyncImage(url: URL(string: user.avatarURL ?? "")) { phase in
+                            switch phase {
+                            case .success(let image):
+                                image.resizable().scaledToFill()
+                            default:
+                                Circle().fill(.gray.opacity(0.3))
                             }
                         }
+                        .frame(width: 44, height: 44)
+                        .clipShape(Circle())
+                        .overlay {
+                            if user.stories.contains(where: { !$0.isSeen }) {
+                                Circle()
+                                    .strokeBorder(Color.accentColor, lineWidth: 2)
+                                    .frame(width: 50, height: 50)
+                            }
+                        }
+
+                        Text(user.username)
+                            .font(.headline)
+                        Spacer()
+                        subtitleView(for: user)
                     }
+                    .padding(.horizontal)
+                    .padding(.vertical, 8)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        selection = StorySelection(
+                            users: sorted,
+                            startingUserIndex: userIndex,
+                            startingStoryIndex: 0
+                        )
+                    }
+
+                    // Story thumbnails grid
+                    LazyVGrid(columns: columns, spacing: 4) {
+                        ForEach(Array(sortedStories.enumerated()), id: \.element.id) { index, story in
+                            storyThumbnail(story: story)
+                                .onTapGesture {
+                                    selection = StorySelection(
+                                        users: sorted,
+                                        startingUserIndex: userIndex,
+                                        startingStoryIndex: index
+                                    )
+                                }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 12)
                 }
             }
         }
+    }
+
+    private func newestTab(sorted: [User]) -> some View {
+        let allStories = sorted.flatMap { user in
+            user.stories.map { (user: user, story: $0) }
+        }.sorted { $0.story.createdAt > $1.story.createdAt }
+
+        return ScrollView {
+            LazyVGrid(columns: columns, spacing: 4) {
+                ForEach(allStories, id: \.story.id) { pair in
+                    storyThumbnail(story: pair.story)
+                        .onTapGesture {
+                            selectStory(pair.story, ofUser: pair.user, in: sorted)
+                        }
+                }
+            }
+            .padding(.horizontal)
+        }
+    }
+
+    private func favoritesTab(sorted: [User]) -> some View {
+        let likedStories = sorted.flatMap { user in
+            user.stories.filter { $0.isLiked ?? false }.map { (user: user, story: $0) }
+        }.sorted { $0.story.createdAt > $1.story.createdAt }
+
+        return ScrollView {
+            if likedStories.isEmpty {
+                ContentUnavailableView(
+                    String(localized: "friends.title"),
+                    systemImage: "heart"
+                )
+                    .padding(.top, 60)
+            } else {
+                LazyVGrid(columns: columns, spacing: 4) {
+                    ForEach(likedStories, id: \.story.id) { pair in
+                        storyThumbnail(story: pair.story)
+                            .onTapGesture {
+                                selectStory(pair.story, ofUser: pair.user, in: sorted)
+                            }
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+    }
+
+    private func selectStory(_ story: Story, ofUser user: User, in sorted: [User]) {
+        guard let userIndex = sorted.firstIndex(where: { $0.id == user.id }) else { return }
+        let sortedStories = user.stories.sorted { $0.createdAt < $1.createdAt }
+        let storyIndex = sortedStories.firstIndex(where: { $0.id == story.id }) ?? 0
+        selection = StorySelection(
+            users: sorted,
+            startingUserIndex: userIndex,
+            startingStoryIndex: storyIndex
+        )
     }
 
     private func storyThumbnail(story: Story) -> some View {

@@ -8,6 +8,7 @@ import Combine
 struct StoryViewerView: View {
     @State private var viewModel: StorySessionViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
 
     private let timer = Timer.publish(every: 1.0 / 30, on: .main, in: .common).autoconnect()
 
@@ -87,11 +88,6 @@ struct StoryViewerView: View {
 
                         Spacer()
 
-                        Image(systemName: "timer")
-                            .font(.body)
-                            .foregroundStyle(.white.opacity(0.8))
-                            .symbolEffect(.rotate, isActive: viewModel.timerRunning)
-
                         Button { dismiss() } label: {
                             Image(systemName: "xmark")
                                 .font(.body.bold())
@@ -103,14 +99,33 @@ struct StoryViewerView: View {
 
                 Spacer()
 
-                if let caption = viewModel.currentStory?.caption {
-                    Text(caption)
-                        .font(.body)
-                        .foregroundStyle(.white)
-                        .shadow(radius: 4)
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                HStack {
+                    if let caption = viewModel.currentStory?.caption {
+                        Text(caption)
+                            .font(.body)
+                            .foregroundStyle(.white)
+                            .shadow(radius: 4)
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    
+                    Spacer()
+                        
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                            viewModel.toggleLikeStatus()
+                            try? modelContext.save()
+                        }
+                    } label: {
+                        Image(systemName: viewModel.currentStory?.isLiked ?? false ? "heart.fill" : "heart")
+                            .font(.body.bold())
+                            .foregroundStyle(viewModel.currentStory?.isLiked ?? false ? .red : .white)
+                            .scaleEffect(viewModel.currentStory?.isLiked ?? false ? 1.2 : 1.0)
+                            .padding()
+                    }
+                    .sensoryFeedback(.impact(flexibility: .soft), trigger: viewModel.currentStory?.isLiked)
                 }
+                
             }
         }
         .statusBarHidden()

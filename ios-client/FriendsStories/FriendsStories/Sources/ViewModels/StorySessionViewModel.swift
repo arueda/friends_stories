@@ -54,6 +54,14 @@ final class StorySessionViewModel {
         timerRunning = true
         markCurrentStorySeen()
     }
+    
+    func toggleLikeStatus() {
+        if currentStory?.isLiked == nil {
+            currentStory?.isLiked = true
+        } else {
+            currentStory?.isLiked?.toggle()
+        }
+    }
 
     private func markCurrentStorySeen() {
         guard let story = currentStory, !story.isSeen else { return }
