@@ -20,7 +20,7 @@ app.get('/api/stories', (req, res) => {
 
   // Get paginated users who have stories (ordered by most recent story)
   const users = db.prepare(`
-    SELECT DISTINCT u.id, u.username, u.avatar_url
+    SELECT u.id, u.username, u.avatar_url
     FROM users u
     JOIN stories s ON s.user_id = u.id
     GROUP BY u.id
@@ -28,9 +28,11 @@ app.get('/api/stories', (req, res) => {
     LIMIT ? OFFSET ?
   `).all(limit, offset);
 
-  // Check if there are more users beyond this page
+  // Check if there are more users beyond this page (same join as above)
   const totalUsers = db.prepare(`
-    SELECT COUNT(DISTINCT user_id) as count FROM stories
+    SELECT COUNT(*) as count FROM (
+      SELECT 1 FROM users u JOIN stories s ON s.user_id = u.id GROUP BY u.id
+    )
   `).get().count;
   const hasMore = offset + limit < totalUsers;
 

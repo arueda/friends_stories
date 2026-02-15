@@ -18,7 +18,7 @@ struct FriendsStoriesApp: App {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601 // I wanna make sure the correct decoding strategy is set.
         self.modelContainer = try! ModelContainer(for: User.self, Story.self)
-        self.networkClient = NetworkClientImpl(baseURL: URL(string: "http://localhost:3000")!, decoder: decoder)
+        self.networkClient = NetworkClientImpl(baseURL: URL(string: "http://192.168.100.12:3000")!, decoder: decoder)
         self.apiClient = FriendsStoriesAPIImpl(networkClient: networkClient)
         self.storiesRepository = StoriesRepositoryImpl(api: apiClient, modelContainer: modelContainer)
     }

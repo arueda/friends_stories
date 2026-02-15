@@ -13,29 +13,53 @@ final class StorySessionViewModel {
     var timerRunning = true
 
     let users: [User]
+    let storyFilter: ((Story) -> Bool)?
+    private let orderedStories: [(user: User, story: Story)]?
+
     var storyDuration: TimeInterval {
         StorySpeed(rawValue: UserDefaults.standard.string(forKey: "storySpeed") ?? "")?.duration ?? StorySpeed.normal.duration
     }
 
     var currentUser: User? {
-        users.indices.contains(currentUserIndex) ? users[currentUserIndex] : nil
+        if let orderedStories {
+            return orderedStories.indices.contains(currentUserIndex) ? orderedStories[currentUserIndex].user : nil
+        }
+        return users.indices.contains(currentUserIndex) ? users[currentUserIndex] : nil
     }
 
     var stories: [Story] {
-        currentUser?.stories.sorted { $0.createdAt < $1.createdAt } ?? []
+        if let orderedStories {
+            guard orderedStories.indices.contains(currentUserIndex) else { return [] }
+            return [orderedStories[currentUserIndex].story]
+        }
+        let sorted = currentUser?.stories.sorted { $0.createdAt < $1.createdAt } ?? []
+        if let storyFilter {
+            return sorted.filter(storyFilter)
+        }
+        return sorted
     }
 
     var currentStory: Story? {
         stories.indices.contains(currentStoryIndex) ? stories[currentStoryIndex] : nil
     }
 
-    init(users: [User], startingUserIndex: Int = 0, startingStoryIndex: Int = 0) {
+    init(users: [User], startingUserIndex: Int = 0, startingStoryIndex: Int = 0, storyFilter: ((Story) -> Bool)? = nil, orderedStories: [(user: User, story: Story)]? = nil) {
         self.users = users
-        self.currentUserIndex = min(startingUserIndex, max(users.count - 1, 0))
-        let sortedStories = users.indices.contains(currentUserIndex)
-            ? users[currentUserIndex].stories.sorted { $0.createdAt < $1.createdAt }
-            : []
-        self.currentStoryIndex = min(startingStoryIndex, max(sortedStories.count - 1, 0))
+        self.storyFilter = storyFilter
+        self.orderedStories = orderedStories
+        if let orderedStories {
+            self.currentUserIndex = min(startingUserIndex, max(orderedStories.count - 1, 0))
+            self.currentStoryIndex = 0
+        } else {
+            self.currentUserIndex = min(startingUserIndex, max(users.count - 1, 0))
+            var sortedStories = users.indices.contains(currentUserIndex)
+                ? users[currentUserIndex].stories.sorted { $0.createdAt < $1.createdAt }
+                : []
+            if let storyFilter {
+                sortedStories = sortedStories.filter(storyFilter)
+            }
+            self.currentStoryIndex = min(startingStoryIndex, max(sortedStories.count - 1, 0))
+        }
     }
 
     func tick() {
@@ -69,6 +93,13 @@ final class StorySessionViewModel {
     }
 
     func goBack() {
+        if orderedStories != nil {
+            if currentUserIndex > 0 {
+                currentUserIndex -= 1
+                startTimer()
+            }
+            return
+        }
         if currentStoryIndex > 0 {
             currentStoryIndex -= 1
             startTimer()
@@ -76,16 +107,43 @@ final class StorySessionViewModel {
     }
 
     func goForward() {
+        if let orderedStories {
+            if currentUserIndex < orderedStories.count - 1 {
+                currentUserIndex += 1
+                startTimer()
+            } else {
+                shouldDismiss = true
+            }
+            return
+        }
         if currentStoryIndex < stories.count - 1 {
             currentStoryIndex += 1
             startTimer()
-        } else if currentUserIndex < users.count - 1 {
-            currentUserIndex += 1
+        } else if let nextIndex = nextUserIndex(after: currentUserIndex) {
+            currentUserIndex = nextIndex
             currentStoryIndex = 0
             startTimer()
         } else {
             shouldDismiss = true
         }
+    }
+
+    private func nextUserIndex(after index: Int) -> Int? {
+        for i in (index + 1)..<users.count {
+            if storiesForUser(at: i).isEmpty == false {
+                return i
+            }
+        }
+        return nil
+    }
+
+    private func storiesForUser(at index: Int) -> [Story] {
+        guard users.indices.contains(index) else { return [] }
+        let sorted = users[index].stories.sorted { $0.createdAt < $1.createdAt }
+        if let storyFilter {
+            return sorted.filter(storyFilter)
+        }
+        return sorted
     }
 
     func barWidth(for index: Int, totalWidth: CGFloat) -> CGFloat {

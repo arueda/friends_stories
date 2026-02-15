@@ -12,22 +12,23 @@ enum FeedTab: String, CaseIterable, Identifiable {
 }
 
 struct FriendsListView: View {
-    @AppStorage("storySpeed") private var storySpeed: String = StorySpeed.normal.rawValue
+    @AppStorage("storySpeed") var storySpeed: String = StorySpeed.normal.rawValue
 
     @Environment(\.modelContext) private var modelContext
-    @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.scenePhase) var scenePhase
     @Environment(\.storiesRepository) private var storiesRepository
     @Environment(NotificationHandler.self) private var notificationHandler
 
-    @State private var selection: StorySelection?
+    @State var selection: StorySelection?
+    @State var showingSettings = false
+    @State var isGenerating = false
+    @State var notificationStatus: UNAuthorizationStatus = .notDetermined
+    
     @State private var isLoading = true
     @State private var loadError = false
-    @State private var showingSettings = false
-    @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
-    @State private var isGenerating = false
     @State private var selectedTab: FeedTab = .friends
-    
-    @Query(sort: \User.username) private var users: [User]
+
+    @Query(sort: \User.username) var users: [User]
     private var sortedUsers: [User] {
         users.sorted { lhs, rhs in
             let lhsUnseen = lhs.stories.contains { !$0.isSeen }
@@ -36,7 +37,7 @@ struct FriendsListView: View {
             return lhs.username < rhs.username
         }
     }
-    
+
     let columns = [
         GridItem(.flexible()),
         GridItem(.flexible()),
@@ -74,7 +75,9 @@ struct FriendsListView: View {
             StoryViewerView(
                 users: selection.users,
                 startingUserIndex: selection.startingUserIndex,
-                startingStoryIndex: selection.startingStoryIndex
+                startingStoryIndex: selection.startingStoryIndex,
+                storyFilter: selection.storyFilter,
+                orderedStories: selection.orderedStories
             )
         }
         .navigationTitle(String(localized: "friends.title"))
@@ -108,165 +111,7 @@ struct FriendsListView: View {
         }
     }
 
-    private var storySpeedSettings: some View {
-        NavigationStack {
-            List {
-                Section("settings.story_speed") {
-                    ForEach(StorySpeed.allCases) { speed in
-                        Button {
-                            storySpeed = speed.rawValue
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(speed.label)
-                                        .foregroundStyle(.primary)
-                                    Text("settings.seconds_per_story \(Int(speed.duration))")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                if storySpeed == speed.rawValue {
-                                    Image(systemName: "checkmark")
-                                        .foregroundStyle(Color.accentColor)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Section("settings.notifications") {
-                    Button {
-                        handleNotificationAction()
-                    } label: {
-                        HStack {
-                            Text("settings.notifications_toggle")
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Text(notificationStatusLabel)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    Text("settings.notifications_description")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .onAppear { checkNotificationStatus() }
-
-                #if DEBUG
-                Section("settings.testing") {
-                    Button(role: .destructive) {
-                        resetSeenState()
-                    } label: {
-                        Text("settings.reset_seen")
-                    }
-                    Text("settings.reset_seen_description")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Button {
-                        generateTestStories()
-                    } label: {
-                        HStack {
-                            Text("settings.generate_stories")
-                            if isGenerating {
-                                Spacer()
-                                ProgressView()
-                                    .controlSize(.small)
-                            }
-                        }
-                    }
-                    .disabled(isGenerating)
-                    Text("settings.generate_stories_description")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                #endif
-            }
-            .navigationTitle(String(localized: "settings.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .onChange(of: scenePhase) { _, phase in
-                if phase == .active {
-                    checkNotificationStatus()
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button(String(localized: "settings.done")) { showingSettings = false }
-                }
-            }
-        }
-        .presentationDetents([.medium])
-    }
-
-    private var notificationStatusLabel: LocalizedStringResource {
-        switch notificationStatus {
-        case .authorized, .provisional, .ephemeral: "settings.notifications_on"
-        case .denied: "settings.notifications_off"
-        default: "settings.notifications_off"
-        }
-    }
-
-    private func checkNotificationStatus() {
-        Task {
-            let settings = await UNUserNotificationCenter.current().notificationSettings()
-            notificationStatus = settings.authorizationStatus
-        }
-    }
-
-    private func handleNotificationAction() {
-        Task {
-            let center = UNUserNotificationCenter.current()
-            let settings = await center.notificationSettings()
-
-            if settings.authorizationStatus == .notDetermined {
-                let granted = try? await center.requestAuthorization(options: [.alert, .badge, .sound])
-                notificationStatus = granted == true ? .authorized : .denied
-            } else {
-                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                await UIApplication.shared.open(url)
-            }
-        }
-    }
-
-    #if DEBUG
-    private func resetSeenState() {
-        for user in users {
-            for story in user.stories {
-                story.seenAt = nil
-            }
-        }
-    }
-
-    private func generateTestStories() {
-        let storyCount = 25
-        isGenerating = true
-        Task {
-            defer { isGenerating = false }
-            let baseURL = URL(string: "http://localhost:3000/api/stories")!
-
-            for i in 1...storyCount {
-                let userId = Int.random(in: 1...4)
-                let seed = "test\(Int.random(in: 1...9999))"
-                let body: [String: Any] = [
-                    "user_id": userId,
-                    "image_url": "https://picsum.photos/seed/\(seed)/400/700",
-                    "caption": "Test story \(i)"
-                ]
-
-                var request = URLRequest(url: baseURL)
-                request.httpMethod = "POST"
-                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-                _ = try? await URLSession.shared.data(for: request)
-            }
-
-            await refresh()
-        }
-    }
-    #endif
-
-    private func refresh() async {
+    func refresh() async {
         isLoading = true
         loadError = false
         do {
@@ -276,170 +121,21 @@ struct FriendsListView: View {
         }
         isLoading = false
     }
-
-    private func friendsTab(sorted: [User]) -> some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(sorted.enumerated()), id: \.element.id) {
-                    userIndex,
-                    user in
-                    let sortedStories = user.stories.sorted {
-                        $0.createdAt < $1.createdAt
-                    }
-
-                    // Avatar + username header
-                    HStack(spacing: 8) {
-                        CachedAsyncImage(url: URL(string: user.avatarURL ?? "")) { phase in
-                            switch phase {
-                            case .success(let image):
-                                image.resizable().scaledToFill()
-                            default:
-                                Circle().fill(.gray.opacity(0.3))
-                            }
-                        }
-                        .frame(width: 44, height: 44)
-                        .clipShape(Circle())
-                        .overlay {
-                            if user.stories.contains(where: { !$0.isSeen }) {
-                                Circle()
-                                    .strokeBorder(Color.accentColor, lineWidth: 2)
-                                    .frame(width: 50, height: 50)
-                            }
-                        }
-
-                        Text(user.username)
-                            .font(.headline)
-                        Spacer()
-                        subtitleView(for: user)
-                    }
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        selection = StorySelection(
-                            users: sorted,
-                            startingUserIndex: userIndex,
-                            startingStoryIndex: 0
-                        )
-                    }
-
-                    // Story thumbnails grid
-                    LazyVGrid(columns: columns, spacing: 4) {
-                        ForEach(Array(sortedStories.enumerated()), id: \.element.id) { index, story in
-                            storyThumbnail(story: story)
-                                .onTapGesture {
-                                    selection = StorySelection(
-                                        users: sorted,
-                                        startingUserIndex: userIndex,
-                                        startingStoryIndex: index
-                                    )
-                                }
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, 12)
-                }
-            }
-        }
-    }
-
-    private func newestTab(sorted: [User]) -> some View {
-        let allStories = sorted.flatMap { user in
-            user.stories.map { (user: user, story: $0) }
-        }.sorted { $0.story.createdAt > $1.story.createdAt }
-
-        return ScrollView {
-            LazyVGrid(columns: columns, spacing: 4) {
-                ForEach(allStories, id: \.story.id) { pair in
-                    storyThumbnail(story: pair.story)
-                        .onTapGesture {
-                            selectStory(pair.story, ofUser: pair.user, in: sorted)
-                        }
-                }
-            }
-            .padding(.horizontal)
-        }
-    }
-
-    private func favoritesTab(sorted: [User]) -> some View {
-        let likedStories = sorted.flatMap { user in
-            user.stories.filter { $0.isLiked ?? false }.map { (user: user, story: $0) }
-        }.sorted { $0.story.createdAt > $1.story.createdAt }
-
-        return ScrollView {
-            if likedStories.isEmpty {
-                ContentUnavailableView(
-                    String(localized: "friends.title"),
-                    systemImage: "heart"
-                )
-                    .padding(.top, 60)
-            } else {
-                LazyVGrid(columns: columns, spacing: 4) {
-                    ForEach(likedStories, id: \.story.id) { pair in
-                        storyThumbnail(story: pair.story)
-                            .onTapGesture {
-                                selectStory(pair.story, ofUser: pair.user, in: sorted)
-                            }
-                    }
-                }
-                .padding(.horizontal)
-            }
-        }
-    }
-
-    private func selectStory(_ story: Story, ofUser user: User, in sorted: [User]) {
-        guard let userIndex = sorted.firstIndex(where: { $0.id == user.id }) else { return }
-        let sortedStories = user.stories.sorted { $0.createdAt < $1.createdAt }
-        let storyIndex = sortedStories.firstIndex(where: { $0.id == story.id }) ?? 0
-        selection = StorySelection(
-            users: sorted,
-            startingUserIndex: userIndex,
-            startingStoryIndex: storyIndex
-        )
-    }
-
-    private func storyThumbnail(story: Story) -> some View {
-        CachedAsyncImage(url: URL(string: story.imageUrl)) { phase in
-            switch phase {
-            case .success(let image):
-                image
-                    .resizable()
-                    .scaledToFill()
-            case .failure:
-                Image(systemName: "photo")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            default:
-                ProgressView()
-                    .controlSize(.mini)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
-        }
-        .aspectRatio(4/7, contentMode: .fill)
-        .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .opacity(story.isSeen ? 0.5 : 1.0)
-    }
-
-    @ViewBuilder
-    private func subtitleView(for user: User) -> some View {
-        let unseenCount = user.stories.filter { !$0.isSeen }.count
-        if unseenCount > 0 {
-            Text("friends.new_count \(unseenCount)")
-                .font(.caption)
-                .foregroundStyle(Color.accentColor)
-        } else {
-            Text("friends.story_count \(user.stories.count)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
 }
 
-private struct StorySelection: Identifiable {
+struct StorySelection: Identifiable {
     let id = UUID()
     let users: [User]
     let startingUserIndex: Int
     let startingStoryIndex: Int
+    let storyFilter: ((Story) -> Bool)?
+    let orderedStories: [(user: User, story: Story)]?
+
+    init(users: [User], startingUserIndex: Int, startingStoryIndex: Int, storyFilter: ((Story) -> Bool)? = nil, orderedStories: [(user: User, story: Story)]? = nil) {
+        self.users = users
+        self.startingUserIndex = startingUserIndex
+        self.startingStoryIndex = startingStoryIndex
+        self.storyFilter = storyFilter
+        self.orderedStories = orderedStories
+    }
 }

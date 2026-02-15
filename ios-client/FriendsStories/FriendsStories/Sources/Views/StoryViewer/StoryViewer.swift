@@ -12,11 +12,13 @@ struct StoryViewerView: View {
 
     private let timer = Timer.publish(every: 1.0 / 30, on: .main, in: .common).autoconnect()
 
-    init(users: [User], startingUserIndex: Int = 0, startingStoryIndex: Int = 0) {
+    init(users: [User], startingUserIndex: Int = 0, startingStoryIndex: Int = 0, storyFilter: ((Story) -> Bool)? = nil, orderedStories: [(user: User, story: Story)]? = nil) {
         self._viewModel = State(initialValue: StorySessionViewModel(
             users: users,
             startingUserIndex: startingUserIndex,
-            startingStoryIndex: startingStoryIndex
+            startingStoryIndex: startingStoryIndex,
+            storyFilter: storyFilter,
+            orderedStories: orderedStories
         ))
     }
 
